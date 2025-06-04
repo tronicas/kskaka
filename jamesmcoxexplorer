@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>آزمون کتاب فارسی</title>
+    <link rel="stylesheet" href="https://pyscript.net/latest/pyscript.css" />
+    <script defer src="https://pyscript.net/latest/pyscript.js"></script>
+    <style>
+        body {
+            font-family: Tahoma, sans-serif;
+            background-color: #f9f9f9;
+            margin: 0;
+            padding: 30px;
+            color: #333;
+            direction: rtl;
+        }
+        h1 {
+            text-align: center;
+            color: #222;
+        }
+        label {
+            display: block;
+            margin-top: 20px;
+            font-weight: bold;
+        }
+        input[type="file"],
+        input[type="password"],
+        button {
+            width: 100%;
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            font-size: 16px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #preview {
+            margin-top: 20px;
+            text-align: center;
+        }
+        #preview img {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        #quiz-box {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            white-space: pre-line;
+            border: 1px solid #ccc;
+        }
+    </style>
+</head>
+<body>
+    <h1>📚 آزمون از روی کتاب فارسی</h1>
+    <label for="api_key">🔑 کلید API OpenAI خود را وارد کنید:</label>
+    <input type="password" id="api_key" placeholder="sk-..." />
+
+    <label for="image">📸 تصویر صفحه کتاب:</label>
+    <input type="file" id="image" accept="image/*" />
+
+    <button id="submit-btn">ارسال برای آزمون</button>
+
+    <div id="preview"></div>
+    <div id="quiz-box"></div>
+
+    <py-script>
+import asyncio
+import base64
+from js import document, FileReader, console
+from pyodide.ffi import create_proxy
+import openai
+
+# Function to handle image upload and API call
+async def process_image(event):
+    api_key_input = document.getElementById("api_key")
+    image_input = document.getElementById("image")
+    preview_div = document.getElementById("preview")
+    quiz_box = document.getElementById("quiz-box")
+
+    if not api_key_input.value:
+        quiz_box.innerText = "لطفاً کلید API را وارد کنید."
+        return
+
+    if not image_input.files.length:
+        quiz_box.innerText = "لطفاً یک تصویر انتخاب کنید."
+        return
+
+    file = image_input.files[0]
+    reader = FileReader.new()
+
+    def onload(event):
+        data_url = reader.result
+        preview_div.innerHTML = f'<img src="{data_url}" />'
+        base64_image = data_url.split(",")[1]
+
+        # Set OpenAI API key
+        openai.api_key = api_key_input.value
+
+        # Create the prompt and send the request
+        try:
+            response = openai.ChatCompletion.create(
+                model="gpt-4-vision-preview",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "تو یک معلم فارسی هستی. از تصویر زیر سوالات چهار گزینه‌ای طرح کن."
+                    },
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/png;base64,{base64_image}"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                max_tokens=1000
+            )
+            quiz = response.choices[0].message.content
+            quiz_box.innerText = quiz
+        except Exception as e:
+            quiz_box.innerText = f"❌ خطا در دریافت از OpenAI: {e}"
+
+    onload_proxy = create_proxy(onload)
+    reader.onload = onload_proxy
+    reader.readAsDataURL(file)
+
+# Attach event listener to the button
+submit_btn = document.getElementById("submit-btn")
+submit_btn.addEventListener("click", create_proxy(process_image))
+    </py-script>
+</body>
+</html>
